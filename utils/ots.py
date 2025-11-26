@@ -1,86 +1,139 @@
 from utils.conectar_bd import conectarBD
+from datetime import datetime
 
-ots = []
-ots_no_activadas = []
+SEPARADOR_OBSERVACION = " ========== OBSERVACION RPA ========== "
+
+
+def obtener_id(nrolote, ot):
+    """Devuelve el ID o None si no existe."""
+    q = "SELECT ID FROM maejecutadet WHERE nrolote = %s AND INDATA2 = %s;"
+    resultado = conectarBD(q, (nrolote, ot), getDatos=True)
+    if not resultado:
+        return None
+    return resultado[0].get('ID')
 
 def excepcion_observa(mensaje, nrolote, ot):
-    q = "SELECT ID FROM maejecutadet where nrolote = %s AND INDATA2 = %s;"
-    resultado = conectarBD(q, (nrolote,ot), getDatos=True)
-    id = resultado[0]['ID']
-    q_update = """UPDATE maejecutadet SET OUTDATA8 = 'NO', 
-        OBSERVA = CONCAT(OBSERVA, 
-        ' ========== OBSERVACION RPA ======== ', 
-        %s) 
-        WHERE ID=%s;"""
-    conectarBD(q_update, (mensaje, id))
+    """Marca OUTDATA8='NO' y concatena mensaje en OBSERVA para la OT."""
+    id_reg = obtener_id(nrolote, ot)
+    if id_reg is None:
+        return False
+    q_update = """
+    UPDATE maejecutadet
+    SET OUTDATA8 = 'NO',
+        OBSERVA = CONCAT(
+            IFNULL(OBSERVA, ''),
+            CASE WHEN OBSERVA IS NULL OR TRIM(OBSERVA) = '' THEN '' ELSE '. ' END,
+            %s
+        )
+    WHERE ID = %s;
+    """
+    # Pasamos el texto ya con separador si lo queremos
+    texto = SEPARADOR_OBSERVACION + mensaje
+    conectarBD(q_update, (texto, id_reg))
     return True
 
 def lista_ots(nrolote):
-    q = "SELECT INDATA2 FROM maejecutadet where nrolote = %s AND OUTDATA9 <> 'No activo';"
+    q = "SELECT INDATA2 FROM maejecutadet WHERE nrolote = %s AND OUTDATA1 <> 'NO';"
     resultado = conectarBD(q, (nrolote,), getDatos=True)
-    for r in resultado:
-        ots.append(r['INDATA2'])
-    return ots
+    if not resultado:
+        return []
+    # usar lista local (no modificar global)
+    return [r['INDATA2'] for r in resultado]
 
 def lista_ots_no_activas(nrolote):
-    rpa = "Estado = No activo, no se hizo la documentacion."
+    """Marca en bloque OTs 'No activo' y concatena observación."""
+    rpa = "Estado = No activo. No se hizo la documentación."
     q = """
     UPDATE maejecutadet
     SET OUTDATA8 = 'NO',
-        OBSERVA = CONCAT(OBSERVA, 
-        ' ========== OBSERVACION RPA ======== ', 
-        %s) 
+        OBSERVA = CONCAT(
+            IFNULL(OBSERVA, ''),
+            CASE WHEN OBSERVA IS NULL OR TRIM(OBSERVA) = '' THEN '' ELSE '. ' END,
+            %s
+        )
     WHERE nrolote = %s AND OUTDATA9 = 'No activo';
     """
-    conectarBD(q, (rpa, nrolote))
-    # si quieres devolver cuántas filas afectó, necesitarías que conectarBD lo retorne
+    texto = SEPARADOR_OBSERVACION + rpa
+    conectarBD(q, (texto, nrolote))
+    return True
+
+def lista_ots_no_suspendidas(nrolote):
+    rpa = "No está suspendido. No se hizo la documentación."
+    q = """
+    UPDATE maejecutadet
+    SET OUTDATA8 = 'NO',
+        OBSERVA = CONCAT(
+            IFNULL(OBSERVA, ''),
+            CASE WHEN OBSERVA IS NULL OR TRIM(OBSERVA) = '' THEN '' ELSE '. ' END,
+            %s
+        )
+    WHERE nrolote = %s AND OUTDATA1 = 'NO';
+    """
+    texto = SEPARADOR_OBSERVACION + rpa
+    conectarBD(q, (texto, nrolote))
     return True
 
 def ot_anulada(nrolote, ot):
-    q = "SELECT ID FROM maejecutadet where nrolote = %s AND INDATA2 = %s;"
-    resultado = conectarBD(q, (nrolote,ot), getDatos=True)
-    id = resultado[0]['ID']
+    id_reg = obtener_id(nrolote, ot)
+    if id_reg is None:
+        return False
     mensaje = "Estado de OT Anulado, no se hizo la documentación."
-    q_update = """UPDATE maejecutadet SET OUTDATA8 = 'NO', 
-        OBSERVA = CONCAT(OBSERVA, 
-        ' ========== OBSERVACION RPA ======== ', 
-        %s) 
-        WHERE ID=%s;"""
-    conectarBD(q_update, (mensaje, id))
-
+    q_update = """
+    UPDATE maejecutadet
+    SET OUTDATA8 = 'NO', OUTDATA10 = 'Anulado',
+        OBSERVA = CONCAT(
+            IFNULL(OBSERVA, ''),
+            CASE WHEN OBSERVA IS NULL OR TRIM(OBSERVA) = '' THEN '' ELSE '. ' END,
+            %s
+        )
+    WHERE ID = %s;
+    """
+    texto = SEPARADOR_OBSERVACION + mensaje
+    conectarBD(q_update, (texto, id_reg))
     return True
-    
 
 def observacion(nrolote, ot):
-    q = "SELECT OUTDATA2, OUTDATA4, OUTDATA7 FROM maejecutadet where nrolote = %s and INDATA2 = %s;"
+    q = "SELECT OUTDATA2, OUTDATA4, OUTDATA7 FROM maejecutadet WHERE nrolote = %s AND INDATA2 = %s;"
     resultado = conectarBD(q, (nrolote, ot), getDatos=True)
-
-    nodo = resultado[0]['OUTDATA2']
-    interfaz = resultado[0]['OUTDATA4']
-    ip_interfaz = resultado[0]['OUTDATA7']
+    if not resultado:
+        return ""
+    row = resultado[0]
+    nodo = row.get('OUTDATA2') or ''
+    interfaz = row.get('OUTDATA4') or ''
+    ip_interfaz = row.get('OUTDATA7') or ''
     mensaje = f"Suspendido por Telprime. NODO: [{nodo}], INTERFAZ: [{interfaz}], IP INTERFAZ: [{ip_interfaz}]"
     return mensaje
-    #return ots_no_activadas
 
 def suspension_admin(estado, nrolote, ot):
-    q = "SELECT ID FROM maejecutadet where nrolote = %s AND INDATA2 = %s;"
-    resultado = conectarBD(q, (nrolote,ot), getDatos=True)
-    id = resultado[0]['ID']
-    if estado == 1:
-        valor = 'SI'
-    else:
-        valor = "NO"
-    q_update = "UPDATE maejecutadet SET OUTDATA8 = %s WHERE ID=%s;"
-    conectarBD(q_update, (valor, id))
-    
-
+    id_reg = obtener_id(nrolote, ot)
+    if id_reg is None:
+        return False
+    valor = 'SI' if estado == 1 else 'NO'
+    q_update = "UPDATE maejecutadet SET OUTDATA8 = %s WHERE ID = %s;"
+    conectarBD(q_update, (valor, id_reg))
+    return True
 
 def subir_estado(nrolote, estado, ot):
-    q = "SELECT ID FROM maejecutadet where nrolote = %s AND INDATA2 = %s;"
-    resultado = conectarBD(q, (nrolote,ot), getDatos=True)
-    id = resultado[0]['ID']
-    
+    id_reg = obtener_id(nrolote, ot)  # CORRECCIÓN
+    if id_reg is None:
+        return False
     q = "UPDATE maejecutadet SET OUTDATA10 = %s WHERE ID = %s;"
-    conectarBD(q, (estado, id))
+    conectarBD(q, (estado, id_reg))
     return True
-#print(observacion(20251911124615, 246464))
+
+def grabar_logs(log, nrolote, ot):
+    now = datetime.now()
+    fecha_log = now.strftime("%d/%m/%Y %H:%M:%S")
+    log_completo = f"{fecha_log} - {log}"
+    id = obtener_id(nrolote, ot)
+    q_update = """
+    UPDATE maejecutadet
+    SET LOG = CONCAT(
+            IFNULL(LOG, ''),
+            CASE WHEN LOG IS NULL OR TRIM(LOG) = '' THEN '' ELSE ' .' END,
+            %s
+        )
+    WHERE ID = %s;
+    """
+    conectarBD(q_update, (log_completo, id))
+    return True
