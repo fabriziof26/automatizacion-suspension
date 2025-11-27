@@ -5,7 +5,6 @@ SEPARADOR_OBSERVACION = " ========== OBSERVACION RPA ========== "
 
 
 def obtener_id(nrolote, ot):
-    """Devuelve el ID o None si no existe."""
     q = "SELECT ID FROM maejecutadet WHERE nrolote = %s AND INDATA2 = %s;"
     resultado = conectarBD(q, (nrolote, ot), getDatos=True)
     if not resultado:
@@ -13,7 +12,6 @@ def obtener_id(nrolote, ot):
     return resultado[0].get('ID')
 
 def excepcion_observa(mensaje, nrolote, ot):
-    """Marca OUTDATA8='NO' y concatena mensaje en OBSERVA para la OT."""
     id_reg = obtener_id(nrolote, ot)
     if id_reg is None:
         return False
@@ -41,7 +39,6 @@ def lista_ots(nrolote):
     return [r['INDATA2'] for r in resultado]
 
 def lista_ots_no_activas(nrolote):
-    """Marca en bloque OTs 'No activo' y concatena observación."""
     rpa = "Estado = No activo. No se hizo la documentación."
     q = """
     UPDATE maejecutadet
