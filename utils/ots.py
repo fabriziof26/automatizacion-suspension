@@ -54,8 +54,11 @@ def lista_ots_no_activas(nrolote):
     conectarBD(q, (texto, nrolote))
     return True
 
-def lista_ots_no_suspendidas(nrolote):
-    rpa = "No está suspendido. No se hizo la documentación."
+def lista_ots_sin_hacer_tarea(nrolote, tarea=0):    # 1 para suspension, 0 para reconexion
+    if tarea == 1:
+        rpa = "No está suspendido. No se hizo la documentación."
+    else:
+        rpa = "No está reactivado. No se hizo la documentación."
     q = """
     UPDATE maejecutadet
     SET OUTDATA8 = 'NO',
@@ -98,8 +101,12 @@ def observacion(nrolote, ot):
     nodo = row.get('OUTDATA2') or ''
     interfaz = row.get('OUTDATA4') or ''
     ip_interfaz = row.get('OUTDATA7') or ''
-    mensaje = f"Suspendido por Telprime. NODO: [{nodo}], INTERFAZ: [{interfaz}], IP INTERFAZ: [{ip_interfaz}]"
+    mensaje = f"Suspendido por Telprime. NROLOTE: [{nrolote}] NODO: [{nodo}], INTERFAZ: [{interfaz}], IP INTERFAZ: [{ip_interfaz}]"
     return mensaje
+
+def observacion_reconexion(nrolote):
+    obs = f"Reconexion por Telprime. Lote: {nrolote}"
+    return obs
 
 def suspension_admin(estado, nrolote, ot):
     id_reg = obtener_id(nrolote, ot)
